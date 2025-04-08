@@ -25,8 +25,7 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000', 
-    'https://ahmedessyad.github.io', 
-    'https://ahmedessyad.github.io/admin-dashboard'
+   'https://ahmedessyad.github.io/admin-dashboard/'
   ],
   credentials: true
 }));
