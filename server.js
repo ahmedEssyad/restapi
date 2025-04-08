@@ -23,7 +23,11 @@ const app = express();
 
 // Configurer CORS
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://your-frontend-domain.com'],
+  origin: [
+    'http://localhost:3000', 
+    'https://ahmedessyad.github.io', 
+    'https://ahmedessyad.github.io/admin-dashboard'
+  ],
   credentials: true
 }));
 
