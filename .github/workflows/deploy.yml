@@ -1,0 +1,23 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [ main ]
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16'
+        
+    - name: Install Dependencies
+      run: npm ci
+      
+    # If you're using a platform like Heroku, Render, or Railway, you can add deployment steps here
+    # This example is just a placeholder - you'll need to modify for your specific hosting platform
