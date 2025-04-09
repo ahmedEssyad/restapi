@@ -21,15 +21,21 @@ const notificationsRoutes = require('./routes/notifications');
 
 const app = express();
 
-// Configurer CORS
-app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'https://ahmedessyad.github.io', 
-    'https://ahmedessyad.github.io/admin-dashboard'
-  ],
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000', 
+      'https://ahmedessyad.github.io'
+    ];
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
-}));
+};
+app.use(cors(corsOptions));
 
 // Configurer le middleware pour parser le JSON et les formulaires
 app.use(express.json());
