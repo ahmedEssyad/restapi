@@ -1,11 +1,31 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid'); 
 
+// Sous-schéma pour les variantes de produit
+const variationSchema = new mongoose.Schema({
+  attributes: {
+    color: { type: String, default: null },
+    size: { type: String, default: null },
+    // Vous pouvez ajouter d'autres attributs ici
+  },
+  sku: { type: String, default: () => uuidv4().substring(0, 8).toUpperCase() },
+  quantite: { type: Number, default: 0 },
+  price: { type: Number, default: null }, // Prix spécifique à cette variante (optionnel)
+  pictures: { type: [String], default: [] },
+  mainPicture: { type: String, default: null }
+}, { _id: true });
+
 const productSchema = new mongoose.Schema({
   id: {
     type: String,
     default: uuidv4, 
     unique: true,    
+  },
+  productType: {
+    type: String,
+    enum: ['simple', 'variable'],
+    default: 'simple',
+    required: true
   },
   nom: {
     type: String,
@@ -27,10 +47,21 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  // Pour les produits simples
   quantite: {
     type: Number,
-    default: 0,
-    required: [true, 'La quantité du produit est requise.'],
+    default: 0
+  },
+  // Pour les produits variables
+  variations: {
+    type: [variationSchema],
+    default: []
+  },
+  // Options disponibles pour ce produit
+  availableAttributes: {
+    colors: [{ type: String }],
+    sizes: [{ type: String }]
+    // Vous pouvez ajouter d'autres attributs ici
   },
   Company_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -56,5 +87,68 @@ const productSchema = new mongoose.Schema({
   toJSON: { virtuals: true },
   toObject: { virtuals: true },
 });
+
+// Calcul du stock total pour les produits variables
+productSchema.virtual('totalStock').get(function() {
+  if (this.productType === 'simple') {
+    return this.quantite;
+  } else {
+    return this.variations.reduce((total, variation) => total + variation.quantite, 0);
+  }
+});
+
+// Méthode pour vérifier la disponibilité d'une variation spécifique
+productSchema.methods.checkVariationAvailability = function(color, size) {
+  // Pour les produits simples, vérifier simplement la quantité générale
+  if (this.productType === 'simple') {
+    return {
+      available: this.quantite > 0,
+      quantity: this.quantite,
+      variationId: null
+    };
+  }
+  
+  // Pour les produits variables, trouver la variation correspondante
+  const variation = this.variations.find(v => 
+    v.attributes.color === color && v.attributes.size === size
+  );
+  
+  if (!variation) {
+    return {
+      available: false,
+      quantity: 0,
+      variationId: null,
+      error: 'Variation non disponible'
+    };
+  }
+  
+  return {
+    available: variation.quantite > 0,
+    quantity: variation.quantite,
+    variationId: variation._id,
+    variation: variation
+  };
+};
+
+// Méthode pour obtenir toutes les variations disponibles
+productSchema.methods.getAvailableVariations = function() {
+  if (this.productType === 'simple') {
+    return [{
+      available: this.quantite > 0,
+      quantity: this.quantite,
+      attributes: {}
+    }];
+  }
+  
+  return this.variations.map(variation => ({
+    variationId: variation._id,
+    attributes: variation.attributes,
+    quantity: variation.quantite,
+    available: variation.quantite > 0,
+    price: variation.price,
+    sku: variation.sku,
+    mainPicture: variation.mainPicture || this.mainPicture
+  }));
+};
 
 module.exports = mongoose.model('Product', productSchema);

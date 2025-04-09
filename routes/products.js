@@ -238,6 +238,20 @@ router.get('/admin', auth, checkPermission('products', 'read'), async (req, res)
 // Récupérer un produit par ID
 router.get('/:id', async (req, res) => {
   try {
+    // Vérifier si l'ID est défini et valide
+    if (!req.params.id || req.params.id === 'undefined') {
+      return res.status(400).json({
+        message: 'ID de produit non valide ou non fourni.'
+      });
+    }
+
+    // Vérifier si l'ID est un ObjectId MongoDB valide
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        message: 'Format d\'ID de produit non valide.'
+      });
+    }
+
     const product = await Product.findById(req.params.id)
       .populate('Company_id')
       .populate('categoriesa_id')
@@ -246,9 +260,50 @@ router.get('/:id', async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: 'Produit introuvable.' });
     }
-    res.json(product);
+    
+    // Si c'est un produit variable, ajouter les informations sur les variations disponibles
+    if (product.productType === 'variable') {
+      const availableVariations = product.getAvailableVariations();
+      res.json({
+        ...product.toJSON(),
+        availableVariations
+      });
+    } else {
+      res.json(product);
+    }
   } catch (error) {
-    res.status(500).json({ message: 'Une erreur est survenue lors du chargement du produit.' });
+    console.error('Erreur lors du chargement du produit:', error);
+    res.status(500).json({ 
+      message: 'Une erreur est survenue lors du chargement du produit.',
+      error: error.message 
+    });
+  }
+});
+
+// Vérifier la disponibilité d'une variation spécifique
+router.get('/:id/check-variation', async (req, res) => {
+  try {
+    const { color, size } = req.query;
+    
+    const product = await Product.findById(req.params.id);
+    
+    if (!product) {
+      return res.status(404).json({ message: 'Produit introuvable.' });
+    }
+    
+    const availabilityInfo = product.checkVariationAvailability(color, size);
+    
+    res.json({
+      productId: product._id,
+      productName: product.nom,
+      ...availabilityInfo
+    });
+  } catch (error) {
+    console.error('Erreur lors de la vérification de la disponibilité:', error);
+    res.status(500).json({ 
+      message: 'Une erreur est survenue lors de la vérification de la disponibilité.',
+      error: error.message 
+    });
   }
 });
 
@@ -286,9 +341,12 @@ router.post('/', auth, checkPermission('products', 'create'), upload.array('pict
     const pictures = pictureResults.map(result => result.secure_url);
     const mainPicture = pictures.length > 0 ? pictures[0] : null;
     
+    const productType = req.body.productType || 'simple';
+    
     const productData = {
       ...req.body,
       id: uuidv4(),
+      productType,
       categoriesa_id: Array.isArray(req.body.categoriesa_id)
         ? req.body.categoriesa_id
         : req.body.categoriesa_id
@@ -301,9 +359,52 @@ router.post('/', auth, checkPermission('products', 'create'), upload.array('pict
         : [],
       pictures: pictures,
       mainPicture: mainPicture,
-      oldPrice: parseFloat(req.body.oldPrice || 0),
-      quantite: parseInt(req.body.quantite || 0)
+      oldPrice: parseFloat(req.body.oldPrice || 0)
     };
+    
+    // Si c'est un produit simple, ajouter la quantité
+    if (productType === 'simple') {
+      productData.quantite = parseInt(req.body.quantite || 0);
+    } 
+    // Si c'est un produit variable, configurer les variations et attributs disponibles
+    else if (productType === 'variable') {
+      // Initialiser les attributs disponibles vides (seront remplis lors de l'ajout de variations)
+      productData.availableAttributes = {
+        colors: req.body.availableColors 
+          ? req.body.availableColors.split(',').map(color => color.trim())
+          : [],
+        sizes: req.body.availableSizes 
+          ? req.body.availableSizes.split(',').map(size => size.trim()) 
+          : []
+      };
+      
+      // Initialiser les variations comme un tableau vide
+      productData.variations = [];
+      
+      // Si des variations initiales sont fournies, les traiter
+      if (req.body.variations) {
+        try {
+          // Si les variations sont envoyées en tant que chaîne JSON
+          const variationsData = typeof req.body.variations === 'string' 
+            ? JSON.parse(req.body.variations) 
+            : req.body.variations;
+            
+          if (Array.isArray(variationsData)) {
+            productData.variations = variationsData.map(variation => ({
+              attributes: {
+                color: variation.color || null,
+                size: variation.size || null
+              },
+              quantite: parseInt(variation.quantite || 0),
+              price: variation.price ? parseFloat(variation.price) : null,
+              sku: variation.sku || uuidv4().substring(0, 8).toUpperCase()
+            }));
+          }
+        } catch (e) {
+          console.error('Erreur lors du parsing des variations:', e);
+        }
+      }
+    }
 
     const product = new Product(productData);
     await product.save();
@@ -374,10 +475,113 @@ router.put('/:id', auth, checkPermission('products', 'update'), upload.array('pi
         ? req.body.subcategories_id
         : req.body.subcategories_id?.split(',') || [],
       oldPrice: parseFloat(req.body.oldPrice || product.oldPrice),
-      quantite: parseInt(req.body.quantite || product.quantite),
       pictures: pictures,
       mainPicture: mainPicture
     };
+    
+    // Si le type de produit est spécifié, le mettre à jour
+    if (req.body.productType) {
+      // Vérifier si le type de produit est valide
+      if (['simple', 'variable'].includes(req.body.productType)) {
+        updates.productType = req.body.productType;
+      }
+    }
+    
+    // Pour les produits simples, mettre à jour la quantité
+    if (product.productType === 'simple' || updates.productType === 'simple') {
+      updates.quantite = parseInt(req.body.quantite || product.quantite);
+    }
+    
+    // Pour les produits variables, mettre à jour les attributs disponibles si fournis
+    if ((product.productType === 'variable' || updates.productType === 'variable') && 
+        (req.body.availableColors || req.body.availableSizes)) {
+      updates.availableAttributes = {};
+      
+      if (req.body.availableColors) {
+        updates.availableAttributes.colors = req.body.availableColors.split(',').map(color => color.trim());
+      } else if (product.availableAttributes && product.availableAttributes.colors) {
+        updates.availableAttributes.colors = product.availableAttributes.colors;
+      }
+      
+      if (req.body.availableSizes) {
+        updates.availableAttributes.sizes = req.body.availableSizes.split(',').map(size => size.trim());
+      } else if (product.availableAttributes && product.availableAttributes.sizes) {
+        updates.availableAttributes.sizes = product.availableAttributes.sizes;
+      }
+    }
+    
+    // Mise à jour des variations si fournies (pour les produits variables)
+    if ((product.productType === 'variable' || updates.productType === 'variable') && 
+        req.body.variations) {
+      try {
+        // Si les variations sont envoyées en tant que chaîne JSON
+        const variationsData = typeof req.body.variations === 'string' 
+          ? JSON.parse(req.body.variations) 
+          : req.body.variations;
+          
+        if (Array.isArray(variationsData)) {
+          // Mettre à jour uniquement les variations avec un ID existant
+          // Ajouter les nouvelles variations sans ID
+          const updatedVariations = [];
+          
+          // Copier les variations existantes
+          if (product.variations && product.variations.length > 0) {
+            updatedVariations.push(...product.variations);
+          }
+          
+          // Traiter chaque variation envoyée
+          for (const variationData of variationsData) {
+            if (variationData._id) {
+              // Mettre à jour une variation existante
+              const existingIndex = updatedVariations.findIndex(
+                v => v._id.toString() === variationData._id.toString()
+              );
+              
+              if (existingIndex !== -1) {
+                // Mettre à jour les attributs
+                if (variationData.color) {
+                  updatedVariations[existingIndex].attributes.color = variationData.color;
+                }
+                
+                if (variationData.size) {
+                  updatedVariations[existingIndex].attributes.size = variationData.size;
+                }
+                
+                // Mettre à jour les autres propriétés
+                if (variationData.quantite !== undefined) {
+                  updatedVariations[existingIndex].quantite = parseInt(variationData.quantite);
+                }
+                
+                if (variationData.price !== undefined) {
+                  updatedVariations[existingIndex].price = parseFloat(variationData.price);
+                }
+                
+                if (variationData.sku) {
+                  updatedVariations[existingIndex].sku = variationData.sku;
+                }
+              }
+            } else {
+              // Ajouter une nouvelle variation
+              updatedVariations.push({
+                attributes: {
+                  color: variationData.color || null,
+                  size: variationData.size || null
+                },
+                quantite: parseInt(variationData.quantite || 0),
+                price: variationData.price ? parseFloat(variationData.price) : null,
+                sku: variationData.sku || uuidv4().substring(0, 8).toUpperCase(),
+                pictures: [], // Les images seront ajoutées séparément
+                mainPicture: null
+              });
+            }
+          }
+          
+          updates.variations = updatedVariations;
+        }
+      } catch (e) {
+        console.error('Erreur lors du parsing des variations:', e);
+      }
+    }
 
     const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
@@ -522,6 +726,350 @@ router.delete('/:id/discount', auth, checkPermission('products', 'update'), asyn
     res.json({ message: 'La remise a été supprimée avec succès.', product });
   } catch (error) {
     res.status(500).json({ message: 'Une erreur est survenue lors de la suppression de la remise.', error: error.message });
+  }
+});
+
+// ----- Routes pour les produits variables -----
+
+// Ajouter une nouvelle variation à un produit
+router.post('/:id/variations', auth, checkPermission('products', 'update'), upload.array('pictures', 5), async (req, res) => {
+  try {
+    // Vérifier si l'ID est défini et valide
+    if (!req.params.id || req.params.id === 'undefined') {
+      return res.status(400).json({
+        message: 'ID de produit non valide. Assurez-vous que le produit a été enregistré avant d\'ajouter des variations.'
+      });
+    }
+
+    // Vérifier si l'ID est un ObjectId MongoDB valide
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        message: 'Format d\'ID de produit non valide.'
+      });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Produit introuvable.' });
+    }
+    
+    if (product.productType !== 'variable') {
+      return res.status(400).json({ 
+        message: 'Impossible d\'ajouter des variations à un produit simple.'
+      });
+    }
+    
+    // Uploader les images pour cette variation sur Cloudinary si fournies
+    let variationPictures = [];
+    let variationMainPicture = null;
+    
+    if (req.files && req.files.length > 0) {
+      const picturePromises = req.files.map(file => 
+        uploadToCloudinary(file.path, 'products/variations')
+      );
+      
+      const pictureResults = await Promise.all(picturePromises);
+      variationPictures = pictureResults.map(result => result.secure_url);
+      variationMainPicture = variationPictures.length > 0 ? variationPictures[0] : null;
+    }
+    
+    // Créer la nouvelle variation
+    const newVariation = {
+      attributes: {
+        color: req.body.color || null,
+        size: req.body.size || null
+      },
+      quantite: parseInt(req.body.quantite || 0),
+      price: req.body.price ? parseFloat(req.body.price) : null,
+      sku: req.body.sku || uuidv4().substring(0, 8).toUpperCase(),
+      pictures: variationPictures,
+      mainPicture: variationMainPicture || product.mainPicture
+    };
+    
+    // Ajouter la variation au produit
+    product.variations.push(newVariation);
+    
+    // Mettre à jour les attributs disponibles
+    if (newVariation.attributes.color && !product.availableAttributes.colors.includes(newVariation.attributes.color)) {
+      product.availableAttributes.colors.push(newVariation.attributes.color);
+    }
+    
+    if (newVariation.attributes.size && !product.availableAttributes.sizes.includes(newVariation.attributes.size)) {
+      product.availableAttributes.sizes.push(newVariation.attributes.size);
+    }
+    
+    await product.save();
+    
+    res.status(201).json({
+      message: 'Variation ajoutée avec succès',
+      product
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout de la variation:', error);
+    res.status(400).json({
+      message: 'Une erreur est survenue lors de l\'ajout de la variation.',
+      error: error.message
+    });
+  }
+});
+
+// Modifier une variation spécifique
+router.put('/:id/variations/:variationId', auth, checkPermission('products', 'update'), upload.array('pictures', 5), async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Produit introuvable.' });
+    }
+    
+    const variationIndex = product.variations.findIndex(
+      v => v._id.toString() === req.params.variationId
+    );
+    
+    if (variationIndex === -1) {
+      return res.status(404).json({ message: 'Variation introuvable.' });
+    }
+    
+    // Uploader les nouvelles images si fournies
+    if (req.files && req.files.length > 0) {
+      const picturePromises = req.files.map(file => 
+        uploadToCloudinary(file.path, 'products/variations')
+      );
+      
+      const pictureResults = await Promise.all(picturePromises);
+      const newPictures = pictureResults.map(result => result.secure_url);
+      
+      // Ajouter les nouvelles images aux images existantes
+      product.variations[variationIndex].pictures = [
+        ...product.variations[variationIndex].pictures,
+        ...newPictures
+      ];
+      
+      // Si pas d'image principale définie, en définir une
+      if (!product.variations[variationIndex].mainPicture && newPictures.length > 0) {
+        product.variations[variationIndex].mainPicture = newPictures[0];
+      }
+    }
+    
+    // Mettre à jour les attributs de la variation
+    if (req.body.color) {
+      product.variations[variationIndex].attributes.color = req.body.color;
+      
+      // Mettre à jour les attributs disponibles si nécessaire
+      if (!product.availableAttributes.colors.includes(req.body.color)) {
+        product.availableAttributes.colors.push(req.body.color);
+      }
+    }
+    
+    if (req.body.size) {
+      product.variations[variationIndex].attributes.size = req.body.size;
+      
+      // Mettre à jour les attributs disponibles si nécessaire
+      if (!product.availableAttributes.sizes.includes(req.body.size)) {
+        product.availableAttributes.sizes.push(req.body.size);
+      }
+    }
+    
+    if (req.body.quantite) {
+      product.variations[variationIndex].quantite = parseInt(req.body.quantite);
+    }
+    
+    if (req.body.price) {
+      product.variations[variationIndex].price = parseFloat(req.body.price);
+    }
+    
+    if (req.body.sku) {
+      product.variations[variationIndex].sku = req.body.sku;
+    }
+    
+    if (req.body.mainPictureIndex !== undefined) {
+      const index = parseInt(req.body.mainPictureIndex);
+      if (index >= 0 && index < product.variations[variationIndex].pictures.length) {
+        product.variations[variationIndex].mainPicture = product.variations[variationIndex].pictures[index];
+      }
+    }
+    
+    await product.save();
+    
+    res.json({
+      message: 'Variation mise à jour avec succès',
+      product
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de la variation:', error);
+    res.status(400).json({
+      message: 'Une erreur est survenue lors de la mise à jour de la variation.',
+      error: error.message
+    });
+  }
+});
+
+// Supprimer une variation
+router.delete('/:id/variations/:variationId', auth, checkPermission('products', 'update'), async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Produit introuvable.' });
+    }
+    
+    const variationIndex = product.variations.findIndex(
+      v => v._id.toString() === req.params.variationId
+    );
+    
+    if (variationIndex === -1) {
+      return res.status(404).json({ message: 'Variation introuvable.' });
+    }
+    
+    // Supprimer la variation
+    const removedVariation = product.variations.splice(variationIndex, 1)[0];
+    
+    // Supprimer les images Cloudinary associées à cette variation
+    if (removedVariation.pictures && removedVariation.pictures.length > 0) {
+      for (const picturePath of removedVariation.pictures) {
+        if (picturePath.includes('cloudinary')) {
+          try {
+            const parts = picturePath.split('/');
+            const filenameWithExtension = parts[parts.length - 1];
+            const filename = filenameWithExtension.split('.')[0];
+            const publicId = `products/variations/${filename}`;
+            
+            await cloudinary.uploader.destroy(publicId);
+          } catch (error) {
+            console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+          }
+        }
+      }
+    }
+    
+    // Recalculer les attributs disponibles
+    const availableColors = new Set();
+    const availableSizes = new Set();
+    
+    product.variations.forEach(variation => {
+      if (variation.attributes.color) availableColors.add(variation.attributes.color);
+      if (variation.attributes.size) availableSizes.add(variation.attributes.size);
+    });
+    
+    product.availableAttributes.colors = Array.from(availableColors);
+    product.availableAttributes.sizes = Array.from(availableSizes);
+    
+    await product.save();
+    
+    res.json({
+      message: 'Variation supprimée avec succès',
+      product
+    });
+  } catch (error) {
+    console.error('Erreur lors de la suppression de la variation:', error);
+    res.status(500).json({
+      message: 'Une erreur est survenue lors de la suppression de la variation.',
+      error: error.message
+    });
+  }
+});
+
+// Convertir un produit simple en produit variable
+router.put('/:id/convert-to-variable', auth, checkPermission('products', 'update'), async (req, res) => {
+  try {
+    // Vérifier si l'ID est défini et valide
+    if (!req.params.id || req.params.id === 'undefined') {
+      return res.status(400).json({
+        message: 'ID de produit non valide. Assurez-vous que le produit a été enregistré avant conversion.'
+      });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Produit introuvable.' });
+    }
+    
+    if (product.productType === 'variable') {
+      return res.status(400).json({ message: 'Ce produit est déjà un produit variable.' });
+    }
+    
+    // Créer une variation par défaut à partir du produit simple
+    const defaultVariation = {
+      attributes: {
+        color: req.body.defaultColor || null,
+        size: req.body.defaultSize || null
+      },
+      quantite: product.quantite,
+      price: null, // Utilisera le prix de base du produit
+      sku: req.body.sku || uuidv4().substring(0, 8).toUpperCase(),
+      pictures: product.pictures,
+      mainPicture: product.mainPicture
+    };
+    
+    // Convertir le produit
+    product.productType = 'variable';
+    product.variations = [defaultVariation];
+    product.availableAttributes = {
+      colors: defaultVariation.attributes.color ? [defaultVariation.attributes.color] : [],
+      sizes: defaultVariation.attributes.size ? [defaultVariation.attributes.size] : []
+    };
+    
+    // Ne pas supprimer la quantité tout de suite au cas où la conversion échouerait
+    
+    await product.save();
+    
+    res.json({
+      message: 'Produit converti en produit variable avec succès',
+      product
+    });
+  } catch (error) {
+    console.error('Erreur lors de la conversion du produit:', error);
+    res.status(400).json({
+      message: 'Une erreur est survenue lors de la conversion du produit.',
+      error: error.message
+    });
+  }
+});
+
+// Convertir un produit variable en produit simple
+router.put('/:id/convert-to-simple', auth, checkPermission('products', 'update'), async (req, res) => {
+  try {
+    // Vérifier si l'ID est défini et valide
+    if (!req.params.id || req.params.id === 'undefined') {
+      return res.status(400).json({
+        message: 'ID de produit non valide. Assurez-vous que le produit a été enregistré avant conversion.'
+      });
+    }
+    
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Produit introuvable.' });
+    }
+    
+    if (product.productType === 'simple') {
+      return res.status(400).json({ message: 'Ce produit est déjà un produit simple.' });
+    }
+    
+    // Calculer la quantité totale de toutes les variations
+    const totalQuantity = product.variations.reduce(
+      (total, variation) => total + (variation.quantite || 0), 0
+    );
+    
+    // Convertir le produit
+    product.productType = 'simple';
+    product.quantite = totalQuantity;
+    
+    // Conserver les images du produit principal
+    
+    // Supprimer les champs liés aux variations
+    product.variations = [];
+    product.availableAttributes = { colors: [], sizes: [] };
+    
+    await product.save();
+    
+    res.json({
+      message: 'Produit converti en produit simple avec succès',
+      product
+    });
+  } catch (error) {
+    console.error('Erreur lors de la conversion du produit:', error);
+    res.status(400).json({
+      message: 'Une erreur est survenue lors de la conversion du produit.',
+      error: error.message
+    });
   }
 });
 

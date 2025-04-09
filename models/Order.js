@@ -61,6 +61,21 @@ const orderSchema = new mongoose.Schema({
       type: String,
       required: true
     },
+    // Pour les produits variables, stocker l'ID de la variation
+    variationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null
+    },
+    // Stocker les attributs de la variation pour faciliter les requêtes
+    variation: {
+      color: { type: String, default: null },
+      size: { type: String, default: null }
+    },
+    // SKU pour l'inventaire
+    sku: {
+      type: String,
+      default: null
+    },
     quantity: {
       type: Number,
       required: true,
@@ -73,6 +88,11 @@ const orderSchema = new mongoose.Schema({
     totalPrice: {
       type: Number,
       required: true
+    },
+    // Image principale pour l'affichage dans l'historique des commandes
+    mainPicture: {
+      type: String,
+      default: null
     }
   }],
   status: {

@@ -13,6 +13,7 @@ router.post('/', async (req, res) => {
     let totalAmount = 0;
     const orderItems = [];
     
+    // Traiter chaque élément du panier
     for (const item of items) {
       const product = await Product.findById(item.product);
       
@@ -23,24 +24,99 @@ router.post('/', async (req, res) => {
         });
       }
       
-      if (product.quantite < item.quantity) {
-        return res.status(400).json({ 
-          success: false, 
-          message: `Stock insuffisant pour ${product.nom}. Disponible: ${product.quantite}` 
-        });
+      let price = product.discountedPrice || product.oldPrice;
+      let itemTotal = 0;
+      let isStockAvailable = false;
+      let variationData = null;
+      
+      // Gérer différemment selon le type de produit
+      if (product.productType === 'simple') {
+        // Produit simple - vérifier le stock général
+        if (product.quantite < item.quantity) {
+          return res.status(400).json({ 
+            success: false, 
+            message: `Stock insuffisant pour ${product.nom}. Disponible: ${product.quantite}` 
+          });
+        }
+        
+        isStockAvailable = true;
+        itemTotal = price * item.quantity;
+        
+      } else if (product.productType === 'variable') {
+        // Produit variable - vérifier la variation spécifique
+        if (!item.variationId && (!item.variation || !item.variation.color || !item.variation.size)) {
+          return res.status(400).json({
+            success: false,
+            message: `Veuillez spécifier une variation (couleur/taille) pour le produit ${product.nom}`
+          });
+        }
+        
+        // Rechercher la variation soit par ID soit par attributs
+        let variation = null;
+        
+        if (item.variationId) {
+          variation = product.variations.find(v => v._id.toString() === item.variationId);
+        } else {
+          variation = product.variations.find(v => 
+            v.attributes.color === item.variation.color && 
+            v.attributes.size === item.variation.size
+          );
+        }
+        
+        if (!variation) {
+          return res.status(404).json({
+            success: false,
+            message: `Variation non trouvée pour ${product.nom}`
+          });
+        }
+        
+        // Vérifier le stock pour cette variation
+        if (variation.quantite < item.quantity) {
+          return res.status(400).json({
+            success: false,
+            message: `Stock insuffisant pour ${product.nom} (${variation.attributes.color || ''}, ${variation.attributes.size || ''}). Disponible: ${variation.quantite}`
+          });
+        }
+        
+        isStockAvailable = true;
+        
+        // Utiliser le prix spécifique à la variation s'il existe
+        if (variation.price) {
+          price = variation.price;
+        }
+        
+        itemTotal = price * item.quantity;
+        variationData = {
+          variationId: variation._id,
+          variation: {
+            color: variation.attributes.color,
+            size: variation.attributes.size
+          },
+          sku: variation.sku,
+          mainPicture: variation.mainPicture || product.mainPicture
+        };
       }
       
-      const price = product.discountedPrice || product.oldPrice;
-      const itemTotal = price * item.quantity;
-      totalAmount += itemTotal;
-      
-      orderItems.push({
+      // Ajouter l'élément à la commande
+      const orderItem = {
         product: product._id,
         productName: product.nom,
         quantity: item.quantity,
         price: price,
-        totalPrice: itemTotal
-      });
+        totalPrice: itemTotal,
+        mainPicture: product.mainPicture
+      };
+      
+      // Ajouter les informations de variation si disponibles
+      if (variationData) {
+        orderItem.variationId = variationData.variationId;
+        orderItem.variation = variationData.variation;
+        orderItem.sku = variationData.sku;
+        orderItem.mainPicture = variationData.mainPicture;
+      }
+      
+      orderItems.push(orderItem);
+      totalAmount += itemTotal;
     }
     
     const order = new Order({
@@ -54,11 +130,36 @@ router.post('/', async (req, res) => {
     
     await order.save();
     
+    // Mettre à jour les stocks
     for (const item of items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { quantite: -item.quantity } }
-      );
+      const product = await Product.findById(item.product);
+      
+      if (product.productType === 'simple') {
+        // Mettre à jour le stock du produit simple
+        await Product.findByIdAndUpdate(
+          item.product,
+          { $inc: { quantite: -item.quantity } }
+        );
+      } else if (product.productType === 'variable') {
+        // Mettre à jour le stock de la variation spécifique
+        const variationId = item.variationId || 
+          product.variations.find(v => 
+            v.attributes.color === item.variation.color && 
+            v.attributes.size === item.variation.size
+          )?._id;
+        
+        if (variationId) {
+          await Product.updateOne(
+            { 
+              _id: item.product,
+              'variations._id': variationId
+            },
+            {
+              $inc: { 'variations.$.quantite': -item.quantity }
+            }
+          );
+        }
+      }
     }
     
     res.status(201).json({
