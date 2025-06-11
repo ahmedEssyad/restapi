@@ -10,6 +10,14 @@ router.post('/', async (req, res) => {
   try {
     const { customer, shippingAddress, items } = req.body;
     
+    // Vérifier les données obligatoires
+    if (!customer || !shippingAddress || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Données de commande invalides ou incomplètes'
+      });
+    }
+    
     let totalAmount = 0;
     const orderItems = [];
     
@@ -180,7 +188,16 @@ router.post('/', async (req, res) => {
 // Obtenir toutes les commandes (admin)
 router.get('/', authMiddleware, isAdmin, async (req, res) => {
   try {
-    // Vérifier explicitement le rôle - refuser l'accès au responsable produit
+    // Vérifier explicitement le rôle et les permissions
+    if (!req.adminRole) {
+      return res.status(401).json({
+        success: false,
+        message: 'Rôle administrateur non défini'
+      });
+    }
+
+    // Cette vérification est maintenant redondante car déjà gérée par le middleware isAdmin
+    // mais nous la gardons pour plus de clarté et cohérence
     if (req.adminRole === 'productManager') {
       return res.status(403).json({
         success: false,
@@ -188,7 +205,7 @@ router.get('/', authMiddleware, isAdmin, async (req, res) => {
       });
     }
     
-    const { status, startDate, endDate, sort = '-createdAt' } = req.query;
+    const { status, startDate, endDate } = req.query;
     const query = {};
     
     if (status) {
@@ -202,33 +219,49 @@ router.get('/', authMiddleware, isAdmin, async (req, res) => {
       };
     }
     
-    // Filtrer les commandes en fonction du rôle de l'administrateur
-    let orders;
-    if (req.adminRole === 'orderManager') {
-      // Le responsable des commandes voit toutes les commandes
-      orders = await Order.find(query)
-        .sort(sort)
-        .populate('items.product', 'nom mainPicture');
-    } else if (req.adminRole === 'contentEditor') {
-      // L'éditeur de contenu n'a qu'un accès limité
-      orders = await Order.find(query)
-        .select('orderNumber status createdAt totalAmount')
-        .sort(sort);
-    } else {
-      // Pour le superAdmin ou autres rôles non spécifiés
-      orders = await Order.find(query)
-        .sort(sort)
-        .populate('items.product', 'nom mainPicture');
+    // Vérifier si le modèle Order est correctement défini
+    if (!Order || typeof Order.find !== 'function') {
+      return res.status(500).json({
+        success: false,
+        message: 'Erreur de configuration du modèle Order'
+      });
     }
     
-    res.status(200).json({
-      success: true,
-      count: orders.length,
-      data: orders
-    });
-    
+    // Filtrer les commandes en fonction du rôle de l'administrateur
+    let orders;
+    try {
+      if (req.adminRole === 'orderManager' || req.adminRole === 'superAdmin' || req.adminRole === 'admin') {
+        // Le responsable des commandes, superAdmin et admin voient toutes les commandes
+        orders = await Order.find(query)
+          .sort({ createdAt: -1 })  // Tri explicite par date décroissante
+          .populate('items.product', 'nom mainPicture')
+          .lean();  // Optimisation performance
+      } else if (req.adminRole === 'contentEditor') {
+        // L'éditeur de contenu a un accès limité aux commandes
+        orders = await Order.find(query)
+          .select('orderNumber status createdAt totalAmount customer')
+          .sort({ createdAt: -1 })
+          .lean();
+      } else {
+        // Pour les autres rôles non spécifiés mais autorisés par le middleware
+        orders = await Order.find(query)
+          .sort({ createdAt: -1 })
+          .populate('items.product', 'nom mainPicture')
+          .lean();
+      }
+      
+      res.status(200).json({
+        success: true,
+        count: orders.length,
+        data: orders
+      });
+    } catch (dbError) {
+      console.error('Erreur spécifique de MongoDB:', dbError);
+      throw dbError; // rethrow pour être capturé par le catch général
+    }
   } catch (error) {
     console.error('Erreur lors de la récupération des commandes:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des commandes',
@@ -238,35 +271,27 @@ router.get('/', authMiddleware, isAdmin, async (req, res) => {
 });
 
 // Obtenir une commande par ID
-router.get('/', authMiddleware, isAdmin, async (req, res) => {
+router.get('/:id', authMiddleware, isAdmin, async (req, res) => {
     try {
-      const { status, startDate, endDate, sort = '-createdAt' } = req.query;
-      const query = {};
-      
-      if (status) {
-        query.status = status;
-      }
-      
-      if (startDate && endDate) {
-        query.createdAt = {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        };
-      }
-      
-      const orders = await Order.find(query)
-        .sort(sort)
+      const order = await Order.findById(req.params.id)
         .populate('items.product', 'nom mainPicture');
+      
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
+        });
+      }
       
       res.status(200).json({
         success: true,
-        count: orders.length,
-        data: orders
+        data: order
       });
     } catch (error) {
+      console.error('Erreur lors de la récupération de la commande:', error);
       res.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération des commandes',
+        message: 'Erreur lors de la récupération de la commande',
         error: error.message
       });
     }

@@ -91,9 +91,13 @@ const productSchema = new mongoose.Schema({
 // Calcul du stock total pour les produits variables
 productSchema.virtual('totalStock').get(function() {
   if (this.productType === 'simple') {
-    return this.quantite;
+    return this.quantite || 0;
   } else {
-    return this.variations.reduce((total, variation) => total + variation.quantite, 0);
+    // Vérifier si variations existe et est un tableau avant d'utiliser reduce
+    if (!this.variations || !Array.isArray(this.variations)) {
+      return 0;
+    }
+    return this.variations.reduce((total, variation) => total + (variation.quantite || 0), 0);
   }
 });
 
@@ -102,15 +106,25 @@ productSchema.methods.checkVariationAvailability = function(color, size) {
   // Pour les produits simples, vérifier simplement la quantité générale
   if (this.productType === 'simple') {
     return {
-      available: this.quantite > 0,
-      quantity: this.quantite,
+      available: (this.quantite || 0) > 0,
+      quantity: this.quantite || 0,
       variationId: null
+    };
+  }
+  
+  // Vérifier si variations existe et est un tableau
+  if (!this.variations || !Array.isArray(this.variations)) {
+    return {
+      available: false,
+      quantity: 0,
+      variationId: null,
+      error: 'Variations non définies'
     };
   }
   
   // Pour les produits variables, trouver la variation correspondante
   const variation = this.variations.find(v => 
-    v.attributes.color === color && v.attributes.size === size
+    v.attributes && v.attributes.color === color && v.attributes.size === size
   );
   
   if (!variation) {
@@ -123,8 +137,8 @@ productSchema.methods.checkVariationAvailability = function(color, size) {
   }
   
   return {
-    available: variation.quantite > 0,
-    quantity: variation.quantite,
+    available: (variation.quantite || 0) > 0,
+    quantity: variation.quantite || 0,
     variationId: variation._id,
     variation: variation
   };
@@ -134,17 +148,22 @@ productSchema.methods.checkVariationAvailability = function(color, size) {
 productSchema.methods.getAvailableVariations = function() {
   if (this.productType === 'simple') {
     return [{
-      available: this.quantite > 0,
-      quantity: this.quantite,
+      available: (this.quantite || 0) > 0,
+      quantity: this.quantite || 0,
       attributes: {}
     }];
   }
   
+  // Vérifier si variations existe et est un tableau
+  if (!this.variations || !Array.isArray(this.variations)) {
+    return [];
+  }
+  
   return this.variations.map(variation => ({
     variationId: variation._id,
-    attributes: variation.attributes,
-    quantity: variation.quantite,
-    available: variation.quantite > 0,
+    attributes: variation.attributes || {},
+    quantity: variation.quantite || 0,
+    available: (variation.quantite || 0) > 0,
     price: variation.price,
     sku: variation.sku,
     mainPicture: variation.mainPicture || this.mainPicture

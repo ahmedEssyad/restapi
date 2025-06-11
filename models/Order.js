@@ -1,159 +1,180 @@
 const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const orderSchema = new mongoose.Schema({
-  orderNumber: {
+// Schéma pour les articles de commande
+const orderItemSchema = new Schema({
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    required: true
+  },
+  productName: {
+    type: String,
+    required: true
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1
+  },
+  price: {
+    type: Number,
+    required: true
+  },
+  totalPrice: {
+    type: Number,
+    required: true
+  },
+  mainPicture: {
+    type: String
+  },
+  variationId: {
+    type: mongoose.Schema.Types.ObjectId
+  },
+  variation: {
+    color: String,
+    size: String
+  },
+  sku: String
+});
+
+// Schéma pour l'historique des statuts
+const statusHistorySchema = new Schema({
+  status: {
     type: String,
     required: true,
-    unique: true,
-    // Génération automatique d'un numéro de commande au format ORD-YYYYMMDD-XXXX
-    default: () => {
-      const date = new Date();
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const random = Math.floor(1000 + Math.random() * 9000);
-      return `ORD-${year}${month}${day}-${random}`;
-    }
+    enum: ['en attente', 'confirmée', 'en préparation', 'expédiée', 'livrée', 'payée', 'annulée']
+  },
+  date: {
+    type: Date,
+    default: Date.now
+  },
+  comment: {
+    type: String
+  }
+});
+
+// Schéma principal pour les commandes
+const orderSchema = new Schema({
+  orderNumber: {
+    type: String,
+    unique: true
   },
   customer: {
     firstName: {
       type: String,
-      required: [true, 'Le prénom est requis']
+      required: true
     },
     lastName: {
       type: String,
-      required: [true, 'Le nom est requis']
+      required: true
     },
-    
+    email: String,
     phone: {
       type: String,
-      required: [true, 'Le numéro de téléphone est requis']
+      required: true
     }
   },
   shippingAddress: {
     address: {
       type: String,
-      required: [true, 'L\'adresse est requise']
+      required: true
     },
     city: {
       type: String,
-      required: [true, 'La ville est requise']
+      required: true
     },
     postalCode: {
       type: String,
-      required: [true, 'Le code postal est requis']
+      required: true
     },
     country: {
       type: String,
       default: 'Mauritanie'
     },
-    additionalInfo: {
-      type: String
-    }
+    additionalInfo: String
   },
-  items: [{
-    product: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Product',
-      required: true
-    },
-    productName: {
-      type: String,
-      required: true
-    },
-    // Pour les produits variables, stocker l'ID de la variation
-    variationId: {
-      type: mongoose.Schema.Types.ObjectId,
-      default: null
-    },
-    // Stocker les attributs de la variation pour faciliter les requêtes
-    variation: {
-      color: { type: String, default: null },
-      size: { type: String, default: null }
-    },
-    // SKU pour l'inventaire
-    sku: {
-      type: String,
-      default: null
-    },
-    quantity: {
-      type: Number,
-      required: true,
-      min: [1, 'La quantité minimale est 1']
-    },
-    price: {
-      type: Number,
-      required: true
-    },
-    totalPrice: {
-      type: Number,
-      required: true
-    },
-    // Image principale pour l'affichage dans l'historique des commandes
-    mainPicture: {
-      type: String,
-      default: null
-    }
-  }],
+  items: [orderItemSchema],
+  totalAmount: {
+    type: Number,
+    required: true
+  },
   status: {
     type: String,
     enum: ['en attente', 'confirmée', 'en préparation', 'expédiée', 'livrée', 'payée', 'annulée'],
     default: 'en attente'
   },
-  statusHistory: [{
-    status: {
-      type: String,
-      enum: ['en attente', 'confirmée', 'en préparation', 'expédiée', 'livrée', 'payée', 'annulée']
-    },
-    date: {
-      type: Date,
-      default: Date.now
-    },
-    comment: {
-      type: String
-    }
-  }],
-  totalAmount: {
-    type: Number,
-    required: true
-  },
-  paymentMethod: {
-    type: String,
-    enum: ['paiement à la livraison'],
-    default: 'paiement à la livraison'
-  },
+  statusHistory: [statusHistorySchema],
   isPaid: {
     type: Boolean,
     default: false
   },
-  paymentDate: {
-    type: Date
+  paymentMethod: {
+    type: String,
+    enum: ['paiement à la livraison', 'carte bancaire', 'autre'],
+    default: 'paiement à la livraison'
   },
-  notes: {
-    type: String
-  },
-}, { 
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  paymentDate: Date,
+  notes: String
+}, { timestamps: true });
+
+// Génération automatique du numéro de commande
+orderSchema.pre('save', async function(next) {
+  if (!this.orderNumber) {
+    try {
+      // Format: CMD-{ANNÉE}{MOIS}{JOUR}-{NOMBRE INCRÉMENTAL À 4 CHIFFRES}
+      const today = new Date();
+      const datePrefix = `CMD-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+      
+      // Trouver toutes les commandes du jour
+      const lastOrder = await this.constructor.findOne({
+        orderNumber: { $regex: new RegExp(`^${datePrefix}`) }
+      }, {}, { sort: { 'orderNumber': -1 } });
+      
+      // Incrémenter le compteur
+      if (lastOrder) {
+        const lastNumber = parseInt(lastOrder.orderNumber.split('-').pop(), 10);
+        this.orderNumber = `${datePrefix}-${String(lastNumber + 1).padStart(4, '0')}`;
+      } else {
+        this.orderNumber = `${datePrefix}-0001`;
+      }
+      
+      next();
+    } catch (error) {
+      next(error);
+    }
+  } else {
+    next();
+  }
 });
 
-// Méthode pour mettre à jour le statut avec historique
-orderSchema.methods.updateStatus = function(newStatus, comment = '') {
-  this.status = newStatus;
-  this.statusHistory.push({
-    status: newStatus,
-    date: new Date(),
-    comment: comment
-  });
-  
-  // Si le statut est "payée", mettre à jour les champs de paiement
-  if (newStatus === 'payée') {
-    this.isPaid = true;
-    this.paymentDate = new Date();
+// Méthode pour mettre à jour le statut d'une commande
+orderSchema.methods.updateStatus = async function(newStatus, comment) {
+  // Vérifier si le nouveau statut est différent du statut actuel
+  if (this.status !== newStatus) {
+    // Ajouter l'entrée à l'historique
+    this.statusHistory.push({
+      status: newStatus,
+      date: new Date(),
+      comment: comment
+    });
+    
+    // Mettre à jour le statut actuel
+    this.status = newStatus;
+    
+    // Mettre à jour le statut de paiement si nécessaire
+    if (newStatus === 'payée') {
+      this.isPaid = true;
+      this.paymentDate = new Date();
+    }
+    
+    // Sauvegarder les modifications
+    await this.save();
   }
   
-  return this.save();
+  return this;
 };
 
-module.exports = mongoose.model('Order', orderSchema);
+const Order = mongoose.model('Order', orderSchema);
+
+module.exports = Order;
