@@ -1,7 +1,8 @@
 const cloudinary = require('cloudinary').v2;
+const logger = require('../services/logger');
 
 // Configuration de Cloudinary avec les variables d'environnement
-console.log('Configuration Cloudinary avec:', {
+logger.info('Configuration Cloudinary initialisée', {
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'Non défini',
   api_key: process.env.CLOUDINARY_API_KEY ? 'Défini' : 'Non défini',
   api_secret: process.env.CLOUDINARY_API_SECRET ? 'Défini' : 'Non défini',

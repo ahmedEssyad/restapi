@@ -3,6 +3,7 @@ const Admin = require('../models/Admin');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const readline = require('readline');
+const logger = require('../services/logger');
 require('dotenv').config();
 
 // Interface pour les entrées utilisateur
@@ -35,9 +36,9 @@ function generateSecurePassword(length = 12) {
 
 async function createAdmin() {
   try {
-    console.log('Connexion à MongoDB...');
+    logger.info('Connexion à MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ Connexion MongoDB réussie');
+    logger.info('✅ Connexion MongoDB réussie');
 
     // Vérifier si un superAdmin existe déjà
     const existingAdmin = await Admin.findOne({ role: 'superAdmin' });
@@ -46,7 +47,7 @@ async function createAdmin() {
       const confirmDelete = await askQuestion('Un administrateur existe déjà. Voulez-vous le remplacer? (oui/non): ');
       
       if (confirmDelete.toLowerCase() !== 'oui') {
-        console.log('Opération annulée.');
+        logger.info('Opération annulée.');
         rl.close();
         await mongoose.connection.close();
         return process.exit(0);
@@ -54,7 +55,7 @@ async function createAdmin() {
       
       // Supprimer uniquement cet administrateur
       await Admin.deleteOne({ _id: existingAdmin._id });
-      console.log('Administrateur existant supprimé');
+      logger.info('Administrateur existant supprimé');
     }
 
     // Demander des informations ou utiliser des valeurs par défaut
@@ -65,7 +66,7 @@ async function createAdmin() {
     
     if (!password) {
       password = generateSecurePassword();
-      console.log(`Mot de passe généré: ${password}`);
+      logger.info(`Mot de passe généré: ${password}`);
     }
     
     // Création d'un nouvel administrateur avec le rôle superAdmin
@@ -83,22 +84,21 @@ async function createAdmin() {
 
     // Vérifier que l'administrateur a été créé
     const savedAdmin = await Admin.findOne({ username });
-    console.log('✅ Super administrateur créé avec succès:');
-    console.log({
+    logger.info('✅ Super administrateur créé avec succès:', {
       username: savedAdmin.username,
       role: savedAdmin.role,
       _id: savedAdmin._id
     });
-    console.log(`\nIMPORTANT: Notez bien vos identifiants de connexion.`);
+    logger.info('IMPORTANT: Notez bien vos identifiants de connexion.');
 
     // Fermer la connexion à la base de données
     rl.close();
     await mongoose.connection.close();
-    console.log('Connexion MongoDB fermée');
+    logger.info('Connexion MongoDB fermée');
     
     process.exit(0);
   } catch (error) {
-    console.error('Erreur:', error);
+    logger.error('Erreur:', error);
     if (rl) rl.close();
     if (mongoose.connection) await mongoose.connection.close();
     process.exit(1);

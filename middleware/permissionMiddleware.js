@@ -1,4 +1,5 @@
 const Admin = require('../models/Admin');
+const logger = require('../services/logger');
 
 // Middleware de vérification des permissions
 const checkPermission = (resource, action) => {
@@ -41,7 +42,7 @@ const checkPermission = (resource, action) => {
       req.adminId = admin._id;
       next();
     } catch (error) {
-      console.error('Erreur de vérification des permissions:', error);
+      logger.error('Erreur de vérification des permissions:', error);
       return res.status(500).json({ message: 'Erreur lors de la vérification des permissions' });
     }
   };

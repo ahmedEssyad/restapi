@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const Product = require('../models/Product');
 const Company = require('../models/Company');
 const Subcategory = require('../models/Subcategory');
+const logger = require('../services/logger');
 
 // Récupérer toutes les catégories
 router.get('/', async (req, res) => {
@@ -57,7 +58,7 @@ router.get('/:id', async (req, res) => {
     res.json(categoryWithDetails);
 
   } catch (error) {
-    console.error('Error fetching category:', error);
+    logger.error('Error fetching category:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -65,8 +66,8 @@ router.get('/:id', async (req, res) => {
 // Créer une catégorie
 router.post('/', auth, upload.single('logo'), async (req, res) => {
   try {
-    console.log('POST /categories - Données reçues:', req.body);
-    console.log('POST /categories - Fichier reçu:', req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'Aucun');
+    logger.info('POST /categories - Données reçues:', req.body);
+    logger.info('POST /categories - Fichier reçu:', req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'Aucun');
 
     const { name } = req.body;
 
@@ -79,12 +80,12 @@ router.post('/', auth, upload.single('logo'), async (req, res) => {
     // Uploader le logo sur Cloudinary si présent
     if (req.file) {
       try {
-        console.log('Tentative d\'upload sur Cloudinary:', req.file.path);
+        logger.info('Tentative d\'upload sur Cloudinary:', req.file.path);
         const result = await uploadToCloudinary(req.file.path, 'categories');
         logoUrl = result.secure_url;
-        console.log('Upload Cloudinary réussi:', logoUrl);
+        logger.info('Upload Cloudinary réussi:', logoUrl);
       } catch (cloudinaryError) {
-        console.error('Erreur Cloudinary:', cloudinaryError);
+        logger.error('Erreur Cloudinary:', cloudinaryError);
         // Ne pas échouer complètement si l'upload Cloudinary échoue
         // Continuer sans logo
       }
@@ -97,14 +98,14 @@ router.post('/', auth, upload.single('logo'), async (req, res) => {
       description: req.body.description || ''
     };
 
-    console.log('Données catégorie à sauvegarder:', categoryData);
+    logger.info('Données catégorie à sauvegarder:', categoryData);
     const category = new Category(categoryData);
     await category.save();
-    console.log('Catégorie créée avec succès:', category._id);
+    logger.info('Catégorie créée avec succès:', category._id);
 
     res.status(201).json(category);
   } catch (error) {
-    console.error('Error creating category:', error);
+    logger.error('Error creating category:', error);
     res.status(500).json({
       message: 'Une erreur est survenue lors de la création de la catégorie.',
       error: error.message,
@@ -116,8 +117,8 @@ router.post('/', auth, upload.single('logo'), async (req, res) => {
 // Mettre à jour une catégorie
 router.put('/:id', auth, upload.single('logo'), async (req, res) => {
   try {
-    console.log(`PUT /categories/${req.params.id} - Données reçues:`, req.body);
-    console.log(`PUT /categories/${req.params.id} - Fichier reçu:`, req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'Aucun');
+    logger.info(`PUT /categories/${req.params.id} - Données reçues:`, req.body);
+    logger.info(`PUT /categories/${req.params.id} - Fichier reçu:`, req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'Aucun');
 
     const category = await Category.findById(req.params.id);
     if (!category) {
@@ -127,7 +128,7 @@ router.put('/:id', auth, upload.single('logo'), async (req, res) => {
     // Si une nouvelle image est uploadée et qu'il y avait déjà une image
     if (req.file && category.logo && category.logo.includes('cloudinary')) {
       try {
-        console.log('Suppression de l\'ancienne image Cloudinary');
+        logger.info('Suppression de l\'ancienne image Cloudinary');
         // Supprimer l'ancienne image de Cloudinary
         const parts = category.logo.split('/');
         const filenameWithExtension = parts[parts.length - 1];
@@ -136,7 +137,7 @@ router.put('/:id', auth, upload.single('logo'), async (req, res) => {
         
         await cloudinary.uploader.destroy(publicId);
       } catch (error) {
-        console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+        logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
         // Continuer même en cas d'erreur
       }
     }
@@ -145,12 +146,12 @@ router.put('/:id', auth, upload.single('logo'), async (req, res) => {
     let logoUrl = category.logo;
     if (req.file) {
       try {
-        console.log('Tentative d\'upload sur Cloudinary:', req.file.path);
+        logger.info('Tentative d\'upload sur Cloudinary:', req.file.path);
         const result = await uploadToCloudinary(req.file.path, 'categories');
         logoUrl = result.secure_url;
-        console.log('Upload Cloudinary réussi:', logoUrl);
+        logger.info('Upload Cloudinary réussi:', logoUrl);
       } catch (cloudinaryError) {
-        console.error('Erreur Cloudinary:', cloudinaryError);
+        logger.error('Erreur Cloudinary:', cloudinaryError);
         // Ne pas échouer complètement si l'upload Cloudinary échoue
         // Conserver l'ancien logo
       }
@@ -161,13 +162,13 @@ router.put('/:id', auth, upload.single('logo'), async (req, res) => {
       logo: logoUrl
     };
 
-    console.log('Mises à jour à appliquer:', updates);
+    logger.info('Mises à jour à appliquer:', updates);
     const updatedCategory = await Category.findByIdAndUpdate(req.params.id, updates, { new: true });
-    console.log('Catégorie mise à jour avec succès:', updatedCategory._id);
+    logger.info('Catégorie mise à jour avec succès:', updatedCategory._id);
     
     res.json(updatedCategory);
   } catch (error) {
-    console.error('Erreur de mise à jour:', error);
+    logger.error('Erreur de mise à jour:', error);
     res.status(400).json({ 
       message: 'Une erreur est survenue lors de la mise à jour de la catégorie.',
       error: error.message,
@@ -194,7 +195,7 @@ router.delete('/:id', auth, async (req, res) => {
         
         await cloudinary.uploader.destroy(publicId);
       } catch (error) {
-        console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+        logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
       }
     }
 

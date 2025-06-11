@@ -3,6 +3,7 @@ const router = express.Router();
 const Subcategory = require('../models/Subcategory');
 const auth = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const logger = require('../services/logger');
 
 // Récupérer toutes les sous-catégories
 router.get('/', async (req, res) => {
@@ -52,7 +53,7 @@ router.post('/', auth, async (req, res) => {
     const savedSubcategory = await Subcategory.findById(subcategory._id).populate('categories_id');
     res.status(201).json(savedSubcategory);
   } catch (error) {
-    console.error('Erreur lors de la création de la sous-catégorie:', error.message);
+    logger.error('Erreur lors de la création de la sous-catégorie:', error.message);
     res.status(400).json({
       message: 'Une erreur est survenue lors de l\'enregistrement de la sous-catégorie.',
       error: error.message,

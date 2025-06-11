@@ -3,6 +3,7 @@ const router = express.Router();
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const Company = require('../models/Company');
+const logger = require('../services/logger');
 
 router.get('/', async (req, res) => {
   try {
@@ -15,24 +16,24 @@ router.get('/', async (req, res) => {
     try {
       stats.categories = await Category.countDocuments();
     } catch (error) {
-      console.error('Erreur de comptage des catégories:', error);
+      logger.error('Erreur de comptage des catégories:', error);
     }
 
     try {
       stats.products = await Product.countDocuments();
     } catch (error) {
-      console.error('Erreur de comptage des produits:', error);
+      logger.error('Erreur de comptage des produits:', error);
     }
 
     try {
       stats.companies = await Company.countDocuments();
     } catch (error) {
-      console.error('Erreur de comptage des entreprises:', error);
+      logger.error('Erreur de comptage des entreprises:', error);
     }
 
     res.json(stats);
   } catch (error) {
-    console.error('Erreur de statistiques:', error);
+    logger.error('Erreur de statistiques:', error);
     res.json({
       categories: 0,
       products: 0,

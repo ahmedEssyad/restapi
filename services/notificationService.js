@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const Admin = require('../models/Admin');
+const logger = require('../services/logger');
 
 /**
  * Service pour la gestion des notifications
@@ -29,7 +30,7 @@ class NotificationService {
       
       return await notification.save();
     } catch (error) {
-      console.error('Erreur lors de la création de la notification:', error);
+      logger.error('Erreur lors de la création de la notification:', error);
       throw error;
     }
   }
@@ -63,7 +64,7 @@ class NotificationService {
       
       return await Promise.all(notificationPromises);
     } catch (error) {
-      console.error('Erreur lors de la notification par rôle:', error);
+      logger.error('Erreur lors de la notification par rôle:', error);
       throw error;
     }
   }
@@ -103,7 +104,7 @@ class NotificationService {
       
       return await Promise.all(notificationPromises);
     } catch (error) {
-      console.error('Erreur lors de la notification par permission:', error);
+      logger.error('Erreur lors de la notification par permission:', error);
       throw error;
     }
   }
@@ -120,7 +121,7 @@ class NotificationService {
         read: false
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération du nombre de notifications:', error);
+      logger.error('Erreur lors de la récupération du nombre de notifications:', error);
       throw error;
     }
   }

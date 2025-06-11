@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Notification = require('../models/Notification');
+const logger = require('../services/logger');
 
 // Récupérer toutes les notifications de l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
@@ -32,7 +33,7 @@ router.get('/', auth, async (req, res) => {
       unreadCount
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération des notifications:', error);
+    logger.error('Erreur lors de la récupération des notifications:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des notifications',
@@ -64,7 +65,7 @@ router.patch('/:id/read', auth, async (req, res) => {
       data: notification
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la notification:', error);
+    logger.error('Erreur lors de la mise à jour de la notification:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour de la notification',
@@ -86,7 +87,7 @@ router.patch('/read-all', auth, async (req, res) => {
       modifiedCount: result.modifiedCount
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour des notifications:', error);
+    logger.error('Erreur lors de la mise à jour des notifications:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour des notifications',
@@ -115,7 +116,7 @@ router.delete('/:id', auth, async (req, res) => {
       message: 'Notification supprimée avec succès'
     });
   } catch (error) {
-    console.error('Erreur lors de la suppression de la notification:', error);
+    logger.error('Erreur lors de la suppression de la notification:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la suppression de la notification',
@@ -153,7 +154,7 @@ router.post('/', auth, async (req, res) => {
       data: notification
     });
   } catch (error) {
-    console.error('Erreur lors de la création de la notification:', error);
+    logger.error('Erreur lors de la création de la notification:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création de la notification',

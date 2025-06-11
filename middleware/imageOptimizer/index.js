@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const logger = require('../../services/logger');
 // Remove sharp dependency until it can be properly installed
 // const sharp = require('sharp');
 
@@ -14,10 +15,10 @@ const optimizeImage = async (req, res, next) => {
     }
 
     // Passer au middleware suivant sans traitement
-    console.log('Image optimization skipped - sharp not installed');
+    logger.info('Image optimization skipped - sharp not installed');
     next();
   } catch (error) {
-    console.error('Erreur d\'optimisation d\'image:', error);
+    logger.error('Erreur d\'optimisation d\'image:', error);
     next(error);
   }
 };
@@ -35,10 +36,10 @@ const resizeOnRequest = async (req, res, next) => {
     }
 
     // Passer au middleware suivant sans traitement
-    console.log('Image resizing skipped - sharp not installed');
+    logger.info('Image resizing skipped - sharp not installed');
     next();
   } catch (error) {
-    console.error('Erreur de redimensionnement d\'image:', error);
+    logger.error('Erreur de redimensionnement d\'image:', error);
     next(error);
   }
 };

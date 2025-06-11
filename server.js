@@ -8,6 +8,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const fs = require('fs');
+const logger = require('./services/logger');
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const categoryRoutes = require('./routes/categories');
@@ -18,6 +19,7 @@ const orderRoutes = require('./routes/orders');
 const homeRoutes = require('./routes/home');
 const uploadsRoutes = require('./routes/uploads');
 const notificationsRoutes = require('./routes/notifications');
+const docsRouter = require('./docs');
 
 const app = express();
 
@@ -59,10 +61,10 @@ mongoose.connect(process.env.MONGODB_URI, {
   retryWrites: true,
 })
 .then(() => {
-  console.log('MongoDB connecté avec succès');
+  logger.database('MongoDB connecté avec succès');
 })
 .catch((err) => {
-  console.error("Erreur de connexion MongoDB:", err.message);
+  logger.error("Erreur de connexion MongoDB:", { error: err.message });
   process.exit(1);
 });
 
@@ -77,14 +79,22 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/notifications', notificationsRoutes);
 
+// Route pour la documentation API
+app.use('/api-docs', docsRouter);
+
 // Middleware de gestion des erreurs
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error('Erreur système:', { 
+    error: err.message, 
+    stack: err.stack,
+    url: req.url,
+    method: req.method 
+  });
   res.status(500).json({ message: 'Une erreur est survenue dans le système' });
 });
 
 // Définir le port et démarrer le serveur
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
+  logger.info(`Serveur démarré sur le port ${PORT}`, { port: PORT, env: process.env.NODE_ENV });
 });

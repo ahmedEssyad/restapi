@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const cloudinary = require('./cloudinary');
 const fs = require('fs');
+const logger = require('../services/logger');
 
 // Configuration du stockage temporaire pour Multer
 const storage = multer.diskStorage({
@@ -36,7 +37,7 @@ const upload = multer({
 
 // Fonction pour uploader une image sur Cloudinary
 const uploadToCloudinary = async (filePath, folder = 'products') => {
-  console.log('Uploading to Cloudinary:', filePath, 'to folder:', folder);
+  logger.info('Uploading to Cloudinary:', filePath, 'to folder:', folder);
   console.log('Cloudinary config:', {
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: 'XXXXX', // Masqué pour la sécurité
@@ -54,14 +55,14 @@ const uploadToCloudinary = async (filePath, folder = 'products') => {
             fs.unlinkSync(filePath);
           }
         } catch (fsError) {
-          console.error('Erreur lors de la suppression du fichier temporaire:', fsError);
+          logger.error('Erreur lors de la suppression du fichier temporaire:', fsError);
         }
         
         if (error) {
-          console.error('Erreur Cloudinary:', error);
+          logger.error('Erreur Cloudinary:', error);
           return reject(error);
         }
-        console.log('Upload Cloudinary réussi:', result.secure_url);
+        logger.info('Upload Cloudinary réussi:', result.secure_url);
         return resolve(result);
       }
     );

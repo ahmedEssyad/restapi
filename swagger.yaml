@@ -1,0 +1,606 @@
+openapi: 3.0.3
+info:
+  title: REST API - Gestion de produits, catégories et entreprises
+  description: |
+    API REST complète pour la gestion d'un système e-commerce avec :
+    - Gestion des produits (simples et variables)
+    - Gestion des catégories et sous-catégories
+    - Gestion des entreprises
+    - Système de commandes
+    - Authentification et autorisation basée sur les rôles
+    - Notifications système
+    - Upload et optimisation d'images via Cloudinary
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: ISC
+    
+servers:
+  - url: http://localhost:5000
+    description: Serveur de développement
+  - url: https://api.yourdomain.com
+    description: Serveur de production
+
+tags:
+  - name: Auth
+    description: Authentification et gestion des administrateurs
+  - name: Products
+    description: Gestion des produits (simples et variables)
+  - name: Categories
+    description: Gestion des catégories
+  - name: Companies
+    description: Gestion des entreprises
+  - name: Orders
+    description: Gestion des commandes
+  - name: Test
+    description: Endpoints de test
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenu via /api/auth/login
+      
+  schemas:
+    # Schémas d'authentification
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "admin"
+        password:
+          type: string
+          example: "password123"
+          
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Token JWT d'accès
+        refreshToken:
+          type: string
+          description: Token de rafraîchissement
+        expiresIn:
+          type: integer
+          description: Durée de vie du token en millisecondes
+        username:
+          type: string
+        role:
+          type: string
+          enum: [superAdmin, productManager, orderManager, contentEditor]
+        firstName:
+          type: string
+        lastName:
+          type: string
+          
+    # Schémas des produits
+    Product:
+      type: object
+      properties:
+        _id:
+          type: string
+        nom:
+          type: string
+          example: "T-shirt Premium"
+        description:
+          type: string
+          example: "T-shirt de haute qualité en coton bio"
+        oldPrice:
+          type: number
+          example: 39.99
+        discountedPrice:
+          type: number
+          example: 29.99
+        quantite:
+          type: integer
+          example: 100
+        Company_id:
+          type: string
+          description: ID de l'entreprise
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    # Schémas des catégories
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+          example: "Vêtements"
+        description:
+          type: string
+        image:
+          type: string
+          description: URL de l'image
+        createdAt:
+          type: string
+          format: date-time
+          
+    # Schémas des entreprises
+    Company:
+      type: object
+      properties:
+        _id:
+          type: string
+        nom:
+          type: string
+          example: "Fashion Corp"
+        logo:
+          type: string
+          description: URL du logo
+        createdAt:
+          type: string
+          format: date-time
+          
+    # Schémas d'erreur
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+          
+    Success:
+      type: object
+      properties:
+        message:
+          type: string
+        success:
+          type: boolean
+          
+  responses:
+    UnauthorizedError:
+      description: Token d'authentification manquant ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    ForbiddenError:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    NotFoundError:
+      description: Ressource non trouvée
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+            
+    ValidationError:
+      description: Erreur de validation des données
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  # Routes d'authentification
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Connexion administrateur
+      description: Authentifie un administrateur et retourne un token JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Identifiants incorrects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                
+  /api/auth/verify:
+    get:
+      tags:
+        - Auth
+      summary: Vérifier l'authentification
+      description: Vérifie la validité du token et retourne les infos utilisateur
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token valide
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isAuthenticated:
+                    type: boolean
+                  admin:
+                    type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Routes des produits
+  /api/products/test:
+    get:
+      tags:
+        - Test
+      summary: Test de connexion
+      description: Teste la connexion à la base de données
+      responses:
+        '200':
+          description: Test réussi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  database:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        
+  /api/products/promotions:
+    get:
+      tags:
+        - Products
+      summary: Récupérer les produits en promotion
+      description: Retourne tous les produits actuellement en promotion
+      responses:
+        '200':
+          description: Liste des produits en promotion
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+                  
+  /api/products/search:
+    get:
+      tags:
+        - Products
+      summary: Rechercher des produits
+      description: Recherche des produits par nom
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Terme de recherche
+      responses:
+        '200':
+          description: Résultats de recherche
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  count:
+                    type: integer
+                    
+  /api/products:
+    get:
+      tags:
+        - Products
+      summary: Lister les produits (public)
+      description: Récupère tous les produits avec filtrage optionnel
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+          description: Filtrer par catégorie
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+          description: Prix minimum
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+          description: Prix maximum
+      responses:
+        '200':
+          description: Liste des produits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+                  
+    post:
+      tags:
+        - Products
+      summary: Créer un produit
+      description: Crée un nouveau produit (permission requise)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nom
+                - oldPrice
+                - Company_id
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                oldPrice:
+                  type: number
+                Company_id:
+                  type: string
+      responses:
+        '201':
+          description: Produit créé avec succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  product:
+                    $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Récupérer un produit
+      description: Récupère un produit spécifique par son ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID du produit
+      responses:
+        '200':
+          description: Produit trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          
+    put:
+      tags:
+        - Products
+      summary: Mettre à jour un produit
+      description: Met à jour un produit existant (permission requise)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID du produit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                oldPrice:
+                  type: number
+      responses:
+        '200':
+          description: Produit mis à jour avec succès
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          
+    delete:
+      tags:
+        - Products
+      summary: Supprimer un produit
+      description: Supprime un produit (permission requise)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID du produit
+      responses:
+        '200':
+          description: Produit supprimé avec succès
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Routes des catégories
+  /api/categories:
+    get:
+      tags:
+        - Categories
+      summary: Lister les catégories
+      description: Récupère toutes les catégories
+      responses:
+        '200':
+          description: Liste des catégories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+                  
+    post:
+      tags:
+        - Categories
+      summary: Créer une catégorie
+      description: Crée une nouvelle catégorie (permission requise)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Catégorie créée avec succès
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/categories/{id}:
+    get:
+      tags:
+        - Categories
+      summary: Récupérer une catégorie
+      description: Récupère une catégorie spécifique par son ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la catégorie
+      responses:
+        '200':
+          description: Catégorie trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Routes des entreprises
+  /api/companies:
+    get:
+      tags:
+        - Companies
+      summary: Lister les entreprises
+      description: Récupère toutes les entreprises
+      responses:
+        '200':
+          description: Liste des entreprises
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Company'
+                  
+    post:
+      tags:
+        - Companies
+      summary: Créer une entreprise
+      description: Crée une nouvelle entreprise (permission requise)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nom
+              properties:
+                nom:
+                  type: string
+      responses:
+        '201':
+          description: Entreprise créée avec succès
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/companies/{id}:
+    get:
+      tags:
+        - Companies
+      summary: Récupérer une entreprise
+      description: Récupère une entreprise spécifique par son ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de l'entreprise
+      responses:
+        '200':
+          description: Entreprise trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '404':
+          $ref: '#/components/responses/NotFoundError'

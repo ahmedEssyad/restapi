@@ -5,6 +5,7 @@ const Admin = require('../models/Admin');
 const bcrypt = require('bcrypt');
 const auth = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissionMiddleware');
+const logger = require('../services/logger');
 
 // Connexion Admin
 router.post('/login', async (req, res) => {
@@ -62,7 +63,7 @@ router.post('/login', async (req, res) => {
       permissions: admin.permissions
     });
   } catch (error) {
-    console.error('Erreur de connexion:', error);
+    logger.error('Erreur de connexion:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la connexion.' });
   }
 });
@@ -113,7 +114,7 @@ router.post('/update-profile', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erreur de mise à jour du profil:', error);
+    logger.error('Erreur de mise à jour du profil:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la mise à jour du profil.' });
   }
 });
@@ -128,7 +129,7 @@ router.get('/profile', auth, async (req, res) => {
 
     res.json(admin);
   } catch (error) {
-    console.error('Erreur de récupération du profil:', error);
+    logger.error('Erreur de récupération du profil:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la récupération du profil.' });
   }
 });
@@ -141,7 +142,7 @@ router.get('/admins', auth, checkPermission('admins', 'read'), async (req, res) 
     const admins = await Admin.find().select('-password');
     res.json(admins);
   } catch (error) {
-    console.error('Erreur de récupération des administrateurs:', error);
+    logger.error('Erreur de récupération des administrateurs:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la récupération des administrateurs.' });
   }
 });
@@ -181,7 +182,7 @@ router.post('/admins', auth, checkPermission('admins', 'create'), async (req, re
       }
     });
   } catch (error) {
-    console.error('Erreur de création d\'administrateur:', error);
+    logger.error('Erreur de création d\'administrateur:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la création de l\'administrateur.' });
   }
 });
@@ -232,7 +233,7 @@ router.put('/admins/:id', auth, checkPermission('admins', 'update'), async (req,
       admin: updatedAdmin
     });
   } catch (error) {
-    console.error('Erreur de mise à jour d\'administrateur:', error);
+    logger.error('Erreur de mise à jour d\'administrateur:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la mise à jour de l\'administrateur.' });
   }
 });
@@ -264,7 +265,7 @@ router.delete('/admins/:id', auth, checkPermission('admins', 'delete'), async (r
     
     res.json({ message: 'Administrateur supprimé avec succès.' });
   } catch (error) {
-    console.error('Erreur de suppression d\'administrateur:', error);
+    logger.error('Erreur de suppression d\'administrateur:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la suppression de l\'administrateur.' });
   }
 });
@@ -284,7 +285,7 @@ router.post('/logout', async (req, res) => {
     
     res.json({ message: 'Déconnexion réussie' });
   } catch (error) {
-    console.error('Erreur lors de la déconnexion:', error);
+    logger.error('Erreur lors de la déconnexion:', error);
     res.status(500).json({ message: 'Une erreur est survenue lors de la déconnexion' });
   }
 });
@@ -323,7 +324,7 @@ router.post('/refresh-token', async (req, res) => {
         expiresIn: 60 * 60 * 1000 // 1 heure
       });
     } catch (tokenError) {
-      console.error('Erreur de vérification du refresh token:', tokenError);
+      logger.error('Erreur de vérification du refresh token:', tokenError);
       
       // Supprimer le refresh token invalide
       admin.refreshToken = null;
@@ -332,7 +333,7 @@ router.post('/refresh-token', async (req, res) => {
       return res.status(403).json({ message: 'Session expirée, reconnexion nécessaire' });
     }
   } catch (error) {
-    console.error('Erreur lors du rafraîchissement du token:', error);
+    logger.error('Erreur lors du rafraîchissement du token:', error);
     res.status(500).json({ message: 'Une erreur est survenue' });
   }
 });
@@ -358,7 +359,7 @@ router.get('/verify', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erreur de vérification d\'authentification:', error);
+    logger.error('Erreur de vérification d\'authentification:', error);
     res.status(500).json({ isAuthenticated: false, message: 'Erreur de vérification' });
   }
 });

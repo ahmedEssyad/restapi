@@ -9,6 +9,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { upload, uploadToCloudinary } = require('../middleware/cloudinaryUpload');
 const cloudinary = require('../middleware/cloudinary');
+const logger = require('../services/logger');
 
 // Point de terminaison pour tester la connexion
 router.get('/test', (req, res) => {
@@ -42,7 +43,7 @@ router.get('/promotions', async (req, res) => {
 
     res.json(promotions);
   } catch (error) {
-    console.error('Erreur lors de la récupération des promotions:', error);
+    logger.error('Erreur lors de la récupération des promotions:', error);
     res.status(500).json({
       message: 'Une erreur est survenue lors du chargement des promotions',
       error: error.message
@@ -75,7 +76,7 @@ router.get('/search', async (req, res) => {
       count: products.length,
     });
   } catch (error) {
-    console.error('Erreur de recherche:', error);
+    logger.error('Erreur de recherche:', error);
     res.status(500).json({
       success: false,
       message: 'Une erreur est survenue lors de la recherche',
@@ -137,7 +138,7 @@ router.get('/', async (req, res) => {
 
     res.json(products);
   } catch (error) {
-    console.error('Erreur lors de la récupération des produits:', error);
+    logger.error('Erreur lors de la récupération des produits:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -230,7 +231,7 @@ router.get('/admin', auth, checkPermission('products', 'read'), async (req, res)
 
     res.json(products);
   } catch (error) {
-    console.error('Erreur lors de la récupération des produits:', error);
+    logger.error('Erreur lors de la récupération des produits:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -272,7 +273,7 @@ router.get('/:id', async (req, res) => {
       res.json(product);
     }
   } catch (error) {
-    console.error('Erreur lors du chargement du produit:', error);
+    logger.error('Erreur lors du chargement du produit:', error);
     res.status(500).json({ 
       message: 'Une erreur est survenue lors du chargement du produit.',
       error: error.message 
@@ -299,7 +300,7 @@ router.get('/:id/check-variation', async (req, res) => {
       ...availabilityInfo
     });
   } catch (error) {
-    console.error('Erreur lors de la vérification de la disponibilité:', error);
+    logger.error('Erreur lors de la vérification de la disponibilité:', error);
     res.status(500).json({ 
       message: 'Une erreur est survenue lors de la vérification de la disponibilité.',
       error: error.message 
@@ -401,7 +402,7 @@ router.post('/', auth, checkPermission('products', 'create'), upload.array('pict
             }));
           }
         } catch (e) {
-          console.error('Erreur lors du parsing des variations:', e);
+          logger.error('Erreur lors du parsing des variations:', e);
         }
       }
     }
@@ -416,7 +417,7 @@ router.post('/', auth, checkPermission('products', 'create'), upload.array('pict
 
     res.status(201).json(savedProduct);
   } catch (error) {
-    console.error('Erreur lors de la création du produit:', error);
+    logger.error('Erreur lors de la création du produit:', error);
     res.status(400).json({
       message: 'Une erreur est survenue lors de la création du produit.',
       error: error.message,
@@ -579,7 +580,7 @@ router.put('/:id', auth, checkPermission('products', 'update'), upload.array('pi
           updates.variations = updatedVariations;
         }
       } catch (e) {
-        console.error('Erreur lors du parsing des variations:', e);
+        logger.error('Erreur lors du parsing des variations:', e);
       }
     }
 
@@ -593,7 +594,7 @@ router.put('/:id', auth, checkPermission('products', 'update'), upload.array('pi
 
     res.json({ message: 'Produit mis à jour avec succès.', product: updatedProduct });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du produit:', error.message);
+    logger.error('Erreur lors de la mise à jour du produit:', error.message);
     res.status(400).json({
       message: 'Une erreur est survenue lors de la mise à jour du produit.',
       error: error.message,
@@ -629,7 +630,7 @@ router.delete('/:id/image/:imageIndex', auth, checkPermission('products', 'updat
         // Supprimer l'image de Cloudinary
         await cloudinary.uploader.destroy(publicId);
       } catch (error) {
-        console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+        logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
       }
     }
     
@@ -675,7 +676,7 @@ router.delete('/:id', auth, checkPermission('products', 'delete'), async (req, r
             
             await cloudinary.uploader.destroy(publicId);
           } catch (error) {
-            console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+            logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
           }
         }
       }
@@ -805,7 +806,7 @@ router.post('/:id/variations', auth, checkPermission('products', 'update'), uplo
       product
     });
   } catch (error) {
-    console.error('Erreur lors de l\'ajout de la variation:', error);
+    logger.error('Erreur lors de l\'ajout de la variation:', error);
     res.status(400).json({
       message: 'Une erreur est survenue lors de l\'ajout de la variation.',
       error: error.message
@@ -895,7 +896,7 @@ router.put('/:id/variations/:variationId', auth, checkPermission('products', 'up
       product
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la variation:', error);
+    logger.error('Erreur lors de la mise à jour de la variation:', error);
     res.status(400).json({
       message: 'Une erreur est survenue lors de la mise à jour de la variation.',
       error: error.message
@@ -934,7 +935,7 @@ router.delete('/:id/variations/:variationId', auth, checkPermission('products', 
             
             await cloudinary.uploader.destroy(publicId);
           } catch (error) {
-            console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+            logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
           }
         }
       }
@@ -959,7 +960,7 @@ router.delete('/:id/variations/:variationId', auth, checkPermission('products', 
       product
     });
   } catch (error) {
-    console.error('Erreur lors de la suppression de la variation:', error);
+    logger.error('Erreur lors de la suppression de la variation:', error);
     res.status(500).json({
       message: 'Une erreur est survenue lors de la suppression de la variation.',
       error: error.message
@@ -1016,7 +1017,7 @@ router.put('/:id/convert-to-variable', auth, checkPermission('products', 'update
       product
     });
   } catch (error) {
-    console.error('Erreur lors de la conversion du produit:', error);
+    logger.error('Erreur lors de la conversion du produit:', error);
     res.status(400).json({
       message: 'Une erreur est survenue lors de la conversion du produit.',
       error: error.message
@@ -1065,7 +1066,7 @@ router.put('/:id/convert-to-simple', auth, checkPermission('products', 'update')
       product
     });
   } catch (error) {
-    console.error('Erreur lors de la conversion du produit:', error);
+    logger.error('Erreur lors de la conversion du produit:', error);
     res.status(400).json({
       message: 'Une erreur est survenue lors de la conversion du produit.',
       error: error.message

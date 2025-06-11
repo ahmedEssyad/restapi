@@ -3,6 +3,7 @@ const router = express.Router();
 const { authMiddleware, isAdmin } = require('../middleware/authMiddleware');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const logger = require('../services/logger');
 
 
 // Créer une nouvelle commande
@@ -176,7 +177,7 @@ router.post('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erreur lors de la création de la commande:', error);
+    logger.error('Erreur lors de la création de la commande:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création de la commande',
@@ -256,11 +257,11 @@ router.get('/', authMiddleware, isAdmin, async (req, res) => {
         data: orders
       });
     } catch (dbError) {
-      console.error('Erreur spécifique de MongoDB:', dbError);
+      logger.error('Erreur spécifique de MongoDB:', dbError);
       throw dbError; // rethrow pour être capturé par le catch général
     }
   } catch (error) {
-    console.error('Erreur lors de la récupération des commandes:', error);
+    logger.error('Erreur lors de la récupération des commandes:', error);
     
     res.status(500).json({
       success: false,
@@ -288,7 +289,7 @@ router.get('/:id', authMiddleware, isAdmin, async (req, res) => {
         data: order
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération de la commande:', error);
+      logger.error('Erreur lors de la récupération de la commande:', error);
       res.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération de la commande',
@@ -320,7 +321,7 @@ router.patch('/:id/status', authMiddleware, isAdmin, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut:', error);
+    logger.error('Erreur lors de la mise à jour du statut:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour du statut',

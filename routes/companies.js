@@ -6,6 +6,7 @@ const { upload, uploadToCloudinary } = require('../middleware/cloudinaryUpload')
 const cloudinary = require('../middleware/cloudinary');
 const { v4: uuidv4 } = require('uuid');
 const Product = require('../models/Product');
+const logger = require('../services/logger');
 
 // Récupérer toutes les entreprises
 router.get('/', async (req, res) => {
@@ -42,7 +43,7 @@ router.get('/:id', async (req, res) => {
       data: company
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération de l\'entreprise:', error);
+    logger.error('Erreur lors de la récupération de l\'entreprise:', error);
     res.status(500).json({ 
       success: false,
       message: 'Une erreur est survenue lors de la récupération de l\'entreprise.',
@@ -90,7 +91,7 @@ router.post('/', auth, upload.single('logo'), async (req, res) => {
       data: savedCompany
     });
   } catch (error) {
-    console.error('Erreur lors de la création de l\'entreprise:', error.message);
+    logger.error('Erreur lors de la création de l\'entreprise:', error.message);
     res.status(400).json({ 
       success: false,
       message: 'Une erreur est survenue lors de l\'enregistrement de l\'entreprise.',
@@ -121,7 +122,7 @@ router.put('/:id', auth, upload.single('logo'), async (req, res) => {
         
         await cloudinary.uploader.destroy(publicId);
       } catch (error) {
-        console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+        logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
       }
     }
 
@@ -158,7 +159,7 @@ router.put('/:id', auth, upload.single('logo'), async (req, res) => {
       data: updatedCompany
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'entreprise:', error.message);
+    logger.error('Erreur lors de la mise à jour de l\'entreprise:', error.message);
     res.status(400).json({
       success: false,
       message: 'Une erreur est survenue lors de la mise à jour de l\'entreprise.',
@@ -188,7 +189,7 @@ router.delete('/:id', auth, async (req, res) => {
         
         await cloudinary.uploader.destroy(publicId);
       } catch (error) {
-        console.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
+        logger.error('Erreur lors de la suppression de l\'image sur Cloudinary:', error);
       }
     }
 
@@ -225,7 +226,7 @@ router.get('/by-category/:categoryId', async (req, res) => {
       data: companies
     });
   } catch (error) {
-    console.error('Erreur dans la route des entreprises:', error);
+    logger.error('Erreur dans la route des entreprises:', error);
     res.status(500).json({ 
       success: false,
       message: 'Erreur lors de la récupération des entreprises',

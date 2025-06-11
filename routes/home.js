@@ -3,6 +3,7 @@ const router = express.Router();
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const Company = require('../models/Company');
+const logger = require('../services/logger');
 
 // Single endpoint for all homepage data to reduce multiple API calls
 router.get('/homepage-data', async (req, res) => {
@@ -28,7 +29,7 @@ router.get('/homepage-data', async (req, res) => {
       featuredProducts: products
     });
   } catch (error) {
-    console.error('Error fetching homepage data:', error);
+    logger.error('Error fetching homepage data:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -56,7 +57,7 @@ router.get('/promotions', async (req, res) => {
       totalItems: total
     });
   } catch (error) {
-    console.error('Error fetching promotions:', error);
+    logger.error('Error fetching promotions:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

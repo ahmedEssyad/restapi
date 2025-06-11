@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
+const logger = require('../services/logger');
 
 module.exports = async (req, res, next) => {
   try {
@@ -34,7 +35,7 @@ module.exports = async (req, res, next) => {
     
     next();
   } catch (error) {
-    console.error('Erreur d\'authentification:', error);
+    logger.error('Erreur d\'authentification:', error);
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: 'Token invalide' });
     } else if (error.name === 'TokenExpiredError') {
