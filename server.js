@@ -28,7 +28,7 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001', 
-      'https://admin-dashboard-kxlj.vercel.app/'
+      'https://admin-dashboard-kxlj.vercel.app'
      
     ];
     
