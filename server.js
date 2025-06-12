@@ -26,22 +26,41 @@ const app = express();
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      'http://localhost:3000', 
-      'https://ahmedessyad.github.io'
+      'http://localhost:3000',
+      'http://localhost:3001', 
+      'https://ahmedessyad.github.io',
+      'https://admin-dashboard-delta-brown.vercel.app',
+      'https://admin-dashboard-git-main-ahmedessyads-projects.vercel.app',
+      'https://admin-dashboard-ahmedessyads-projects.vercel.app'
     ];
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    
+    // En développement ou si pas d'origin (comme Postman), accepter
+    if (!origin || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 app.use(cors(corsOptions));
 
 // Configurer le middleware pour parser le JSON et les formulaires
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Middleware de debug (temporaire)
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log('Origin:', req.headers.origin || 'no-origin');
+  console.log('User-Agent:', req.headers['user-agent']?.substring(0, 50) || 'unknown');
+  next();
+});
 
 // Créer le dossier uploads s'il n'existe pas
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -78,6 +97,36 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/notifications', notificationsRoutes);
+
+// Route de test pour vérifier la connectivité
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    mongodb: 'connected',
+    cors: {
+      origin: req.headers.origin || 'no-origin',
+      userAgent: req.headers['user-agent']
+    }
+  });
+});
+
+// Route racine pour information
+app.get('/', (req, res) => {
+  res.json({
+    message: 'API Mauristock - Backend fonctionnel',
+    status: 'running',
+    endpoints: [
+      '/api/health',
+      '/api/auth',
+      '/api/products',
+      '/api/categories',
+      '/api/companies',
+      '/api/orders'
+    ]
+  });
+});
 
 // Route pour la documentation API
 app.use('/api-docs', docsRouter);
