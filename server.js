@@ -28,10 +28,8 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001', 
-      'https://ahmedessyad.github.io',
-      'https://admin-dashboard-delta-brown.vercel.app',
-      'https://admin-dashboard-git-main-ahmedessyads-projects.vercel.app',
-      'https://admin-dashboard-ahmedessyads-projects.vercel.app'
+      'https://admin-dashboard-kxlj.vercel.app/'
+     
     ];
     
     // En développement ou si pas d'origin (comme Postman), accepter
